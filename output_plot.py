@@ -1024,13 +1024,94 @@ def standard_star(star, obsid, obs_name=None, mod_name=None):
     plt.title(star+' '+obsid)
     plt.legend()
     plt.show()
+mod_dict = {'wd1057':[],#['wd1057_719_stisnic_008.fits','wd1057_719_mod_006.fits'],
+            'p177':['p177d_stisnic_008.fits','p177d_mod_003.fits'],
+            'bd25':['bd_25d4655_002.fits'],
+            'agk81':['agk_81d266_005.fits','agk_81d266_stisnic_007.fits'],
+            'gd153':[],
+            'p41':[],
+            'wd0320':[],
+            'wr1':[],
+            'wr4':[],
+            'wr52':[],
+            'wr86':[],
+            'wr121':[],
+            'wd1657':[]
+           }
+
+def read_mod(star,mod_dict):
+    docsdir = '/Users/zexixing/Research/swiftASTER/docs/standard/'+star+'/'
+    mod_list = mod_dict[star]
+    if mod_list == None:
+        return None
+    else:
+        all_list = []
+        for mod_name in mod_list:
+            mod_path = docsdir+mod_name
+            mod = fits.open(mod_path)
+            mod_data = mod[1].data
+            flux_mod = mod_data['FLUX']
+            wave_mod = mod_data['WAVELENGTH']
+            if 'mod' in mod_name:
+                type_mod = 'model'
+            elif 'stis' in mod_name:
+                type_mod = 'stis'
+            elif 'iue' in mod_name:
+                type_mod = 'IUE'
+            else:
+                type_mod = 'other'
+            mod_dict = {'wave':wave_mod,'flux':flux_mod,'type':type_mod}
+            all_list.append(mod_dict)
+    return all_list
+            
+def star_compare(star,mod_dict):
+    # mod spec
+    c_dict = {'stisnic':'b','model':'r','other':'y'}
+    mod_list = read_mod(star,mod_dict)
+    # star spec
+    import glob
+    docsdir = '/Users/zexixing/Research/swiftASTER/docs/standard/'+star+'/'
+    clock_path_list = glob.glob(docsdir+'000*_default.pha')
+    normi_path_list = glob.glob(docsdir+'000*_default_norm.pha')
+    for sw_path in (clock_path_list+normi_path_list):
+        sw = fits.open(sw_path)
+        sw_data = sw[2].data
+        sw_time = (sw[2].header['TSTART']+sw[2].header['TSTOP'])/2
+        fscale = (sw_time-126230400)/(12.6*365.26*86400)
+        flux_sw = sw_data['FLUX']
+        wave_sw = sw_data['LAMBDA']
+        fig = plt.figure()
+        plt.plot(wave_sw, flux_sw, 'k-',label='Swift')
+        plt.plot(wave_sw, flux_sw*fscale, 'k--', alpha=0.3, label='Swift (no fscale)')
+        if mod_list == None:
+            pass
+        else:
+            for mod_single in mod_list:
+                mod_flux = mod_single['flux']
+                mod_wave = mod_single['wave']
+                mod_type = mod_single['type']
+                plt.plot(wave_sw, flux_sw,color=c_dict[mod_type],label=mod_type)
+        title_list = sw_path.split('/')[-1].split('_')
+        obsid = title_list[0]
+        ext = title_list[1]
+        if title_list[2] == 'norm':
+            mode = 'norminal'
+        else:
+            mode = 'clocked'
+        plt.title(star+' '+obsid+' '+ext+' '+mode)
+        plt.xlim(800,7000)
+        plt.ylim(0,1.3e-12)
+        plt.show()
+        plt.close()
 
 
+star_compare('wd1057',mod_dict)
 
 # WD1057+719
 #obsid='00055205001'
 #obsid='00055211004'
 #obsid='00055216001'
+##obsid='00055900069'
 #star='wd1057'
 #obs_name = 'wd1057_719_stisnic_008.fits'
 #mod_name = 'wd1057_719_mod_006.fits'

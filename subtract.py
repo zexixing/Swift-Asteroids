@@ -240,8 +240,8 @@ def replace(aster, obsid, regs, shift_v=0, motion_dict=motion_dict,radec='fittin
             data_flip_shiftp = data_flip
         # rotate
         data_rota2 = rotateImage(data_flip_shiftp,angle,(xpix,ypix))
-        ##plt.imshow(data_rota2, vmin=0, vmax=0.1*exp, origin='bottom')
-        ##plt.show()
+        plt.imshow(data_rota2, vmin=0, vmax=0.1*exp, origin='bottom')
+        plt.show()
         # identify stars
         star = data - np.median([med,data,data_rota2],axis=0)
         star_part = np.zeros(star.shape)
@@ -299,7 +299,7 @@ def replace_img(obsid):
 #replace('iris', '00091523001',regs=[[930,990,1090,1150,'up']]) #----
 #replace('nysa', '00091532001',regs=[[1050,1090,860,900,'up'],[835,860,1130,1180,'dw']],shift_v=-5) #----
 
-#replace('themis', '00091593001',regs=[[900,930,1080,1120,'up']],radec='header') #----
+replace('themis', '00091593001',regs=[[900,930,1080,1120,'up']],radec='header') #----
 #replace('themis', '00091595001',regs=[[1050,1090,900,940,'up']],radec='header') #----
 #replace('vesta', '00091022002',regs=[[850,880,1140,1170,'up']],radec='header',shift_v=1) #----
 #replace('dembowska', '00091027001',regs=[[970,1000,920,960,'cn'],[990,1010,880,910,'dw'],[820,860,1130,1180,'cn'],[760,800,1240,1290,'up']]) #----
