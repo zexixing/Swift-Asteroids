@@ -804,7 +804,8 @@ def asterMotion_single(aster_name,aster_id,para_dict,coord,f):
     sigma = para_dict['sigma']
     aster["v"] = aster_name
     # obtaion obsid list
-    obsid_list = ugrismlist(aster_name)
+    obsid_list = ugrismlist(aster_name,remove=['00013947002', '00013947003'],filt='uvgrism')
+    print(obsid_list)
     # loop for every obs
     for obsid in obsid_list:
         #if obsid=='00091026003':
@@ -1024,19 +1025,20 @@ def standard_star(star, obsid, obs_name=None, mod_name=None):
     plt.title(star+' '+obsid)
     plt.legend()
     plt.show()
-mod_dict = {'wd1057':[],#['wd1057_719_stisnic_008.fits','wd1057_719_mod_006.fits'],
-            'p177':['p177d_stisnic_008.fits','p177d_mod_003.fits'],
+
+mod_dict = {'wd1057':['wd1057_719_stisnic_008.fits','wd1057_719_mod_006.fits'],
+            'p177':['p177d_stisnic_008.fits','p177d_001.fits'],#'p177d_mod_003.fits'],
             'bd25':['bd_25d4655_002.fits'],
             'agk81':['agk_81d266_005.fits','agk_81d266_stisnic_007.fits'],
-            'gd153':[],
-            'p41':[],
-            'wd0320':[],
+            'gd153':['gd153_fos_003.fits','gd153_mod_011.fits','gd153_stiswfcnic_002.fits'],
+            'p41':['p041c_stisnic_008.fits','p041c_001.fits'],#'kurucz_kp00_7250.fits'],#'p041c_mod_003.fits'],
+            'wd0320':['wd0320_539_mod_001.fits','wd0320_539_stis_005.fits'],
             'wr1':[],
             'wr4':[],
-            'wr52':[],
+            'wr52':['iue'],
             'wr86':[],
             'wr121':[],
-            'wd1657':[]
+            'wd1657':['wd1657_343_mod_007.fits','wd1657_343_stiswfcnic_003.fits'],
            }
 
 def read_mod(star,mod_dict):
@@ -1044,20 +1046,39 @@ def read_mod(star,mod_dict):
     mod_list = mod_dict[star]
     if mod_list == None:
         return None
+    elif mod_list[0] == 'iue':
+        import glob
+        mod_list = glob.glob(docsdir+'iue/'+'*.fits')
+        flux_list = []
+        wave_list = []
+        sigma_list = []
+        all_list = []
+        for mod_path in mod_list:
+            mod_data = fits.open(mod_path)[1].data
+            flux_list.append(mod_data['FLUX'][0])
+            wave_list.append(mod_data['WAVE'][0])
+            sigma_list.append(mod_data['SIGMA'][0])
+        spec_dict = mergeSpec(wave_list, flux_list, sigma_list=sigma_list)
+        spec_dict = binSpec(spec_dict['wave'], spec_dict['flux'], binGenerate(spec_dict['wave'], 5), sigma=None, flag=None)
+        mod_dict = {'wave':spec_dict['wave'],'flux':spec_dict['flux'],'type':'iue'}
+        all_list.append(mod_dict)
     else:
         all_list = []
         for mod_name in mod_list:
             mod_path = docsdir+mod_name
             mod = fits.open(mod_path)
             mod_data = mod[1].data
-            flux_mod = mod_data['FLUX']
+            if 'kurucz' in mod_name:
+                flux_mod = mod_data['g40']
+            else:
+                flux_mod = mod_data['FLUX']
             wave_mod = mod_data['WAVELENGTH']
             if 'mod' in mod_name:
                 type_mod = 'model'
             elif 'stis' in mod_name:
                 type_mod = 'stis'
-            elif 'iue' in mod_name:
-                type_mod = 'IUE'
+            elif 'kurucz' in mod_name:
+                type_mod = 'kurucz'
             else:
                 type_mod = 'other'
             mod_dict = {'wave':wave_mod,'flux':flux_mod,'type':type_mod}
@@ -1066,7 +1087,7 @@ def read_mod(star,mod_dict):
             
 def star_compare(star,mod_dict):
     # mod spec
-    c_dict = {'stisnic':'b','model':'r','other':'y'}
+    c_dict = {'stis':'b','model':'r','other':'y','iue':'b','kurucz':'r'}
     mod_list = read_mod(star,mod_dict)
     # star spec
     import glob
@@ -1087,25 +1108,30 @@ def star_compare(star,mod_dict):
             pass
         else:
             for mod_single in mod_list:
-                mod_flux = mod_single['flux']
-                mod_wave = mod_single['wave']
-                mod_type = mod_single['type']
-                plt.plot(wave_sw, flux_sw,color=c_dict[mod_type],label=mod_type)
+                type_mod = mod_single['type']
+                if type_mod == 'kurucz':
+                    mod_single = normRefl(mod_single, wave_norm=3800)
+                    f = interpolate.interp1d(wave_sw, flux_sw*fscale)
+                    mod_single['flux'] = mod_single['flux']*f(3800)
+                flux_mod = mod_single['flux']
+                wave_mod = mod_single['wave']
+                plt.plot(wave_mod, flux_mod,color=c_dict[type_mod],label=type_mod)
         title_list = sw_path.split('/')[-1].split('_')
         obsid = title_list[0]
         ext = title_list[1]
-        if title_list[2] == 'norm':
+        if 'norm.pha' in title_list:
             mode = 'norminal'
         else:
             mode = 'clocked'
         plt.title(star+' '+obsid+' '+ext+' '+mode)
         plt.xlim(800,7000)
-        plt.ylim(0,1.3e-12)
+        plt.ylim(0,2e-13)
+        plt.legend()
         plt.show()
         plt.close()
 
-
-star_compare('wd1057',mod_dict)
+# wd1057,p177,bd25,agk81,gd153,p41,wd0320
+#star_compare('p41',mod_dict)
 
 # WD1057+719
 #obsid='00055205001'
@@ -1174,16 +1200,17 @@ plt.show()
 #               juno=True, hebe=False, ceres=False, iris=False, massalia=False, allaster=False)
 #plot_refl_sun()
 #refl_smooth()
-'''
-aster_dict = {#'ceres':1, 'pallas':2, 'juno':3, 'vesta':4, 'hebe':6, 'iris':7, 'flora':8, 
+
+#aster_dict = {#'ceres':1, 'pallas':2, 'juno':3, 'vesta':4, 'hebe':6, 'iris':7, 'flora':8, 
               #'hygiea':10, 'eunomia':15, 'massalia':20, 'lutetia':21, 'themis':24, 'nysa':44,
               #'dembowska':349, 'eros':433, 'scheila':596, 
-              'toutatis':4179, 
-             }
-coord = '_2order_4width'
-output_name = 'motion_log.txt'
-asterMotion(aster_dict,output_name,coord)
-'''
+              #'toutatis':4179, 
+#              'psyche':16,
+#             }
+#coord = '_1_default'
+#output_name = 'motion_log2.txt'
+#asterMotion(aster_dict,output_name,coord)
+
 #swift16flux(['ceres','vesta','juno','hebe','eunomia','massalia','flora','iris','dembowska'],singleObs=False,iue=True)
 
 #swift16flux(['iris'])

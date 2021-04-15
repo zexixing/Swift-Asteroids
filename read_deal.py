@@ -78,7 +78,7 @@ def readinSpec(spec_path, filetype, wave_index, flux_index,
     return spec_dict
 
 def binGenerate(wave, bin_step):
-    bins = np.arange(wave[0],wave[-1]+bin_step,bin_step)
+    bins = np.arange(min(wave),max(wave)+bin_step,bin_step)
     return bins
 
 def binSpec(wave, flux, bins, sigma=None, flag=None):
@@ -170,12 +170,12 @@ def readarf(order=1, smooth=True, iferr=False, filt='uvgrism'):
     arf = fits.open(path)[extname].data
     wave = (arf['WAVE_MIN']+arf['WAVE_MAX'])/2
     ea = arf['SPECRESP']
-    f_arf = interpolate.interp1d(wave,ea,bounds_error=False,fill_value=np.NaN)
+    f_arf = interpolate.interp1d(wave,ea,bounds_error=False,fill_value=0)
     if iferr == False:
         return f_arf
     else:
         eaerr = arf['SPRS_ERR']
-        f_err = interpolate.interp1d(wave,eaerr,bounds_error=False,fill_value=np.NaN)
+        f_err = interpolate.interp1d(wave,eaerr,bounds_error=False,fill_value=0)
         return f_arf, f_err
 
 
@@ -339,18 +339,64 @@ def ugrismlist(aster,remove=False, filt='uvgrism'):
             filelist = os.listdir(obsdir)
             if 'sw'+obsid+filt+'_rw.img.gz' in filelist:
                 namelist.append(obsid)
-    if remove != False: 
-        #remove_list = ['00091503001', #flora -- star
-        #               '00091223001','00091225001','00091229001', #pallas -- star(compact)
-        #               '00091198002', #'00091022002','00091197002', vesta -- star
-        #               '00091220001','00091216001', #'00091218001', lutetia -- star(compact)
-        #               '00091540001','00091538001', #nysa -- star(compact)
-        #               '00091591001', #themis -- wrong position
-        #               ]
+    if remove == False: 
+        pass
+    elif remove == 'rmstar':
+        print('hi')
+        # ceres & vesta & schelia can be removed more
+        remove_list = [ '00091221001','00091223001','00091225001','00091227001','00091229001', #pallas -- star(compact)
+                        '00091022002', '00091197002',#vesta -- star,
+                        '00091220001','00091214001','00091216001','00091218001', #lutetia -- star(compact)
+                        '00091541001','00091543001','00091545001','00091547001','00091549001',#massalia -- star(compact)
+                        '00091540001','00091534001','00091538001', #nysa -- star(compact), @'00091532001'
+                        '00091591001', '00091581001',#themis -- wrong position
+                        '00091207002', #juno -- star in slit
+                        '00091237001', #dembowska -- star in slit
+                        '00091268001', '00091503001', '00091507001', #flora -- star in slit, @'00091501001', '00091505001'
+                        #@'00091559001', #hygiea -- star in slit
+                        #@'00091519001', '00091521001', '00091523001', '00091525001', #iris -- star in slit
+                        '00091589001', #'00091593001', '00091595001', #themis -- star in slit
+                        #'00091600001', '00091609001', '00091606001', '00091597001', '00091603001', #toutatis -- no filter
+                        #@'00091027001', #dembowska -- star in slit
+                        '00091242001','00091246001',#ceres -- star in slit
+                        '00091022002', #vesta -- star
+                        '00031902001', #schelia -- star
+                        ###scatter
+                        '00091521001', #'00091523001', #iris -- high bkg 
+                        '00014037003', '00014037004', '00014034003', #psyche -- bright star
+                        ]
+        for obsid_rm in remove_list:
+            try:    namelist.remove(obsid_rm)
+            except:    pass
+        print(namelist)
+    elif remove == 'strict':
+        remove_list = [ '00091221001','00091223001','00091225001','00091227001','00091229001', #pallas -- star(compact)
+                        '00091022002', '00091197002',#vesta -- star,
+                        '00091220001','00091214001','00091216001','00091218001', #lutetia -- star(compact)
+                        '00091541001','00091543001','00091545001','00091547001','00091549001',#massalia -- star(compact)
+                        '00091540001','00091534001','00091538001', '00091532001',#nysa -- star(compact), 
+                        '00091591001', #themis -- wrong position
+                        '00091207002', #juno -- star in slit
+                        '00091237001', #dembowska -- star in slit
+                        '00091268001', '00091503001', '00091507001', '00091501001', '00091505001',#flora -- star in slit, 
+                        '00091559001', #hygiea -- star in slit
+                        '00091519001', '00091521001', '00091523001', '00091525001', #iris -- star in slit
+                        '00091589001', '00091593001', '00091595001', #themis -- star in slit
+                        #'00091600001', '00091609001', '00091606001', '00091597001', '00091603001', #toutatis -- no filter
+                        '00091027001', #dembowska -- star in slit
+                        '00091242001','00091246001',#ceres -- star in slit
+                        '00091022002', #vesta -- star
+                        '00031902001', #schelia -- star
+                        '00014037003', '00014037004', '00014034003', #psyche -- bright star
+                        ]
+        for obsid_rm in remove_list:
+            try:    namelist.remove(obsid_rm)
+            except:    pass
+    else:
         for obsid_rm in remove:
             try:    namelist.remove(obsid_rm)
             except:    pass
-    return namelist
+    return sorted(namelist)
 
 def colorFader(mix=0,c1='blue',c2='red'): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
     import matplotlib as mpl
@@ -421,8 +467,16 @@ def redden(wave, flux, reddening, l0=5500, l1=3000):
     flux = f(wave)*flux
     return wave, flux
 
+rmstar_list = ['00091525001','00091519001','00091523001', '00091521001',#iris
+               '00091532001', #nysa
+               '00091593001','00091595001',#themis
+               '00091027001',#dembowska
+               '00091505001','00091501001',#flora
+               '00091559001',#hygiea
+               ]
+
 def mean_aster_flux(aster,adjname = '_smeargauss',binbox=10):
-    idlist = ugrismlist(aster)
+    idlist = ugrismlist(aster,remove='rmstar',filt='uvgrism')
     #remove_list = [#'00091503001', #flora -- star
     #               '00091223001','00091225001','00091229001', #pallas -- star(compact)
     #               '00091198002', #'00091022002','00091197002', vesta -- star
@@ -445,6 +499,11 @@ def mean_aster_flux(aster,adjname = '_smeargauss',binbox=10):
     flux_list = []
     for obsid in idlist:
         # flux
+        if adjname == '_rmstar':
+            if obsid in rmstar_list:
+                adjname = '_rmstar'
+            else:
+                adjname = '_radec'
         aster_spec_name = obsid+adjname+'.pha'
         spec_path= docsdir+aster_spec_name
         hdul = fits.open(spec_path)
@@ -484,3 +543,127 @@ def aster_flux(aster, obsid, adjname, binbox=20):
     else:
         flux_dict = coadd_([flux_dict],aster,binbox=binbox)
         return flux_dict
+
+#sun = getSolarFlux('sun_ref_colina96.asc.txt', if_smooth=False)
+sun = getSolarFlux('00091706004.pha', if_smooth=False)
+'''
+plt.plot(sun['wave']/10,sun['flux']/100,'y-',lw=2)
+aster = aster_flux('juno', '00091026003', '_final', binbox=False)
+#plt.plot(aster['wave']/10,aster['flux'],ls='-',lw=1.5)
+#refl = getRefl(aster, sun, aster='.')
+#refl = normRefl(refl, wave_norm=3800)
+#refl = binSpec(refl['wave'], refl['flux'], binGenerate(refl['wave'], 30), sigma=None, flag=None)
+#plt.plot(refl['wave']/10,refl['flux'],'k-',lw=1.5)
+plt.ylim(0,3)
+plt.xlim(200,550)
+plt.xlabel('Wavelength(nm)')
+#plt.ylabel('Reflectance(arbitrary)')
+plt.ylabel('flux(arbitrary)')
+plt.show()
+'''
+'''
+color_list = ['gold','crimson', 'blueviolet', 'dodgerblue','aquamarine','greenyellow']
+idlist = ugrismlist('juno',remove='rmstar',filt='uvgrism')
+n=len(idlist)
+for i in range(0,n):
+    obsid = idlist[i]
+    aster = aster_flux('juno', obsid, '_final', binbox=False)
+    #color = colorFader(mix=i/n,c1='yellow',c2='blue')
+    plt.plot(aster['wave']/10,aster['flux']*1e13,color=color_list[i], ls='-',lw=1.5,alpha=0.7)
+mean_flux = mean_aster_flux('juno',adjname = '_final',binbox=10)
+plt.plot(mean_flux['wave']/10,mean_flux['flux']*1e13,'k-',lw=1.5,label='mean')
+plt.ylim(0,5.5)
+plt.xlim(200,550)
+plt.xlabel('Wavelength(nm)')
+#plt.ylabel('Reflectance(arbitrary)')
+plt.ylabel('flux (1e^-13 erg s-1 cm-2 A-1)')
+plt.legend()
+plt.show()
+'''
+'''
+mean_flux = mean_aster_flux('juno',adjname = '_final',binbox=10)
+refl = getRefl(mean_flux, sun, aster='.')
+refl = normRefl(refl, wave_norm=3800)
+refl = binSpec(refl['wave'], refl['flux'], binGenerate(refl['wave'], 20), sigma=refl['sigma'], flag=None)
+#sigma = refl['sigma']
+#plt.fill_between(refl['wave']/10, refl['flux']-sigma, refl['flux']+sigma, color='k', alpha=0.6)
+plt.plot(refl['wave']/10,refl['flux'],'k-',lw=1.5,label='Swift')
+plt.ylim(0,1.8)
+plt.xlim(200,550)
+plt.xlabel('Wavelength(nm)')
+plt.ylabel('Reflectance(arbitrary)')
+
+f = interpolate.interp1d(refl['wave'],refl['flux'],fill_value="extrapolate")
+refl_iue = readinSpec('/Users/zexixing/Dropbox/PDART Small Bodies UV Archive/IUE/data/reflectance/3 Juno/juno_avg_refl.tab', 'txt', 0, 1,
+                sigma_index=None, flag_index=None,
+                ext=1, sep=' ', skiprows=0)
+refl_iue = normRefl({'wave':np.array(refl_iue['wave'])*10,'flux':np.array(refl_iue['flux'])}, wave_norm=2600)
+plt.plot(refl_iue['wave'][:-70]/10,refl_iue['flux'][:-70]*(f(2600)/f(3800)),'b-',label='IUE',linewidth=1.5,alpha=0.5)
+
+refl_mmt = readinSpec('/Users/zexixing/Research/swiftASTER/docs/'+'juno'+'/3_Juno_27Aug09_refscl.csv', 'csv', 0, 1,
+                    sigma_index=None, flag_index=None,
+                    ext=1, sep=',', skiprows=0)
+refl_mmt = normRefl(refl_mmt, wave_norm=4500)
+plt.plot(refl_mmt['wave']/10,refl_mmt['flux']*(f(4500)/f(3800)),'r-',label='MMT',linewidth=1.5,alpha=0.5)
+plt.legend()
+plt.show()
+'''
+
+s_class=['eros','eunomia','flora','hebe','iris','massalia','juno','toutatis']
+x_class=['nysa','psyche','lutetia']
+c_class=['ceres','hygiea']
+b_class=['pallas','themis']
+r_class=['dembowska']
+v_class=['vesta']
+
+aster_list = ['eunomia','flora','hebe','iris','juno','toutatis','nysa','psyche',
+              'hygiea','themis','dembowska']
+for aster in aster_list:
+    mean_flux = mean_aster_flux(aster,adjname = '_final',binbox=10)
+    refl = getRefl(mean_flux, sun, aster='.')
+    refl = binSpec(refl['wave'], refl['flux'], binGenerate(refl['wave'], 50), flag=None)
+    refl = normRefl(refl, wave_norm=5000)
+    if aster in s_class:
+        color='r'
+        if aster == 'flora': label='S class'
+        else: label = None
+    elif aster in x_class:
+        color='gold'
+        if aster == 'psyche': label='X class'
+        else: label = None
+    elif aster in c_class:
+        color='g'
+        label='C class'
+    elif aster in b_class:
+        color='b'
+        label='B class'
+    elif aster in r_class:
+        color='k'
+        label='R class'
+    plt.plot(refl['wave']/10,refl['flux'],color=color,ls='-',lw=1,alpha=1,label=label)
+#for aster in ['ceres','vesta']:
+#    mean_flux = mean_aster_flux(aster,adjname = '_final',binbox=10)
+#    refl = getRefl(mean_flux, sun, aster='.')
+#    refl = normRefl(refl, wave_norm=5000)
+#    refl = binSpec(refl['wave'], refl['flux'], binGenerate(refl['wave'], 40), flag=None)
+#    if aster == 'ceres':
+#        plt.plot(refl['wave'][:100]/10,refl['flux'][:100],color='g',ls='-',lw=1.5,alpha=0.5)
+#    else:
+#        plt.plot(refl['wave'][:100]/10,refl['flux'][:100],color='k',ls='-',lw=1.5,alpha=0.5)
+plt.legend()
+plt.ylim(0,1.2)
+plt.xlim(215,550)
+plt.xlabel('Wavelength(nm)')
+plt.ylabel('Reflectance(arbitrary)')
+plt.show()
+
+'''
+juno = fits.open('/Users/zexixing/Research/swiftASTER/docs/juno/00091026003_final.pha')
+data = juno[2].data
+wave = data['LAMBDA']
+ea = data['EFFAREA1']
+plt.plot(wave/10,ea,'k-',lw=2)
+plt.xlabel('Wavelength(nm)')
+plt.ylabel('Effective area (cm^2)')
+plt.show()
+'''

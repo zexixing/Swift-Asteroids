@@ -490,12 +490,12 @@ def readFluxCalFile(wheelpos,anchor=None,option="default",spectralorder=1,
        return hdu[model]
    else:
        raise RuntimeError( "invalid option passed to readFluxCalFile") 
-
+'''
 import matplotlib.pyplot as plt
 from matplotlib import colors, cm
 from uvotpy.uvotio import getZmxFlux
 x0,y0=(1000.99762536, 1135.91559724)
-'''
+
 x = list(range(1,2048))
 y = list(range(1,2048))
 a = np.array([x,y])
@@ -1042,7 +1042,7 @@ def phi_fit(t,rx,ry):
    yp1i = bilinear( rx, ry, xf[0,:].squeeze(), yf[:,0].squeeze(), yp1 ,chatter=chatter)
    return xp1i*(1-t)/2+yp1i*(1+t)/2
 
-
+'''
 Xphi = 0.0030912260029784156 
 Yphi = -0.004113097476086955 
 wheelpos = 160 
@@ -1058,7 +1058,7 @@ coef, coef_err = optimize.curve_fit(phi_fit,[-1,1],new_anker,[Xphi,Yphi])
 print(coef)
 print(phi_fit(-1,0.00282986, -0.00292843),phi_fit(1,0.00282986, -0.00292843))
 # [ 0.00282986 -0.00292843]
-
+'''
 
 def findInputAngle(RA,DEC,filestub, ext, wheelpos=200, 
        lfilter='uvw1', lfilter_ext=None, 
@@ -1646,6 +1646,7 @@ def boresight(filter='uvw1',order=1,wave=260,
    raise IOError("valid filter values are 'wh','v',"\
         "'b','u','uvw1','uvm2','uvw2','ug200',"\
         "'uc160','vg1000','vc955'\n")    
+
 '''
 RA=166.61502
 DEC=8.7495
@@ -1662,3 +1663,350 @@ Xphi, Yphi, date1, msg3, lenticular_anchors = findInputAngle( 166.61502, 8.7495,
 
 print(Xphi,Yphi)
 '''
+
+
+def findBackground(extimg,background_lower=[None,None], background_upper=[None,None],yloc_spectrum=100, 
+    smo1=None, smo2=None, chatter=2):
+   '''Extract the background from the image slice containing the spectrum.
+   
+   Parameters
+   ----------
+   extimg : 2D array
+      image containing spectrum. Dispersion approximately along x-axis.
+   background_lower : list
+      distance in pixels from `yloc_spectrum` of the limits of the lower background region.
+   background_upper : list
+      distance in pixels from `yloc_spectrum` of the limits of the upper background region.   
+   yloc_spectrum : int
+      pixel `Y` location of spectrum
+   smo1 : float
+      smoothing parameter passed to smoothing spline fitting routine. `None` for default.  
+   smo2 : float
+      smoothing parameter passed to smoothing spline fitting routine. `None` for default. 
+   chatter : int
+      verbosity
+      
+   Returns
+   -------
+   bg : float
+      mean background 
+   bg1, bg2 : 1D arrays
+      bg1 = lower background; bg2 = upper background
+      inherits size from extimg.shape x-xoordinate
+   bgsig : float
+      standard deviation of background  
+   bgimg : 2D array
+      image of the background constructed from bg1 and/or bg2   
+   bg_limits_used : list, length 4
+      limits used for the background in the following order: lower background, upper background    
+   (bg1_good, bg1_dis, bg1_dis_good, bg2_good, bg2_dis, bg2_dis_good, bgimg_lin) : tuple
+      various other background measures    
+   
+   Notes
+   -----
+   
+   **Global parameter**
+   
+     - **background_method** : {'boxcar','splinefit'}
+
+   The two background images can be computed 2 ways:
+   
+     1. 'splinefit': sigma clip image, then fit a smoothing spline to each 
+         row, then average in y for each background region
+     2. 'boxcar':   select the background from the smoothed image created 
+         by method 1 below.
+     3. 'sigmaclip': do sigma clipping on rows and columns to get column 
+         profile background, then clip image and mask, interpolate over masked 
+         bits.  
+     
+   extimg  is the image containing the spectrum in the 1-axis centered in 0-axis
+   `ank` is the position of the anchor in the image 
+      
+   I create two background images:
+    
+         1. split the image strip into 40 portions in x, so that the background variation is small
+            compute the mean 
+            sigma clip (3 sigma) each area to to the local mean
+            replace out-of-image pixels with mean of whole image (2-sigma clipped)
+            smooth with a boxcar by the smoothing factor
+         2. compute the background in two regions upper and lower 
+            linearly interpolate in Y between the two regions to create a background image    
+      
+      bg1 = lower background; bg2 = upper background
+      
+      smo1, smo2 allow one to relax the smoothing factor in computing the smoothing spline fit
+      
+   History
+   -------
+   -  8 Nov 2011 NPM Kuin complete overhaul     
+          things to do: get quality flagging of bad background points, edges perhaps done here?    
+   -  13 Aug 2012: possible problem was seen of very bright sources not getting masked out properly 
+          and causing an error in the background that extends over a large distance due to the smoothing.
+          The cause is that the sources are more extended than can be handled by this method. 
+          A solution would be to derive a global background     
+   -  30 Sep 2014: background fails in visible grism e.g., 57977004+1 nearby bright spectrum 
+          new method added (4x slower processing) to screen the image using sigma clipping      
+      '''
+   import sys   
+   import numpy as np   
+   try:
+     from convolve import boxcar
+   except:
+     from stsci.convolve import boxcar
+   from scipy import interpolate  
+   import stsci.imagestats as imagestats  
+   import matplotlib.pyplot as plt  
+     
+   # initialize parameters
+   cval = -1.0123456789
+   background_method = 'boxcar'
+   bgimg    = extimg.copy()
+   out    = np.where( (np.abs(bgimg-cval) <= 1e-6) )
+   in_img = np.where( (np.abs(bgimg-cval) >  1e-6) & np.isfinite(bgimg) )
+   nx = bgimg.shape[1]  # number of points in direction of dispersion
+   ny = bgimg.shape[0]  # width of the image     
+   
+   # sigma screening of background taking advantage of the dispersion being 
+   # basically along the x-axis 
+   _PROFILE_BACKGROUND_ = False
+   if _PROFILE_BACKGROUND_:
+      bg, u_x, bg_sig = background_profile(bgimg, smo1=30, badval=cval)
+      u_mask = np.zeros((ny,nx),dtype=bool)
+      for i in range(ny):
+          u_mask[i,(bgimg[i,:].flatten() < u_x) & 
+                np.isfinite(bgimg[i,:].flatten())] = True
+                
+      bkg_sc = np.zeros((ny,nx),dtype=float)
+      # the following leaves larger disps in the dispersion but less noise; 
+      # tested but not implemented, as it is not as fast and the mean results 
+      # are comparable: 
+      #for i in range(ny):
+      #    uf = interpolate.interp1d(np.where(u_mask[i,:])[0],bgimg[i,u_mask[i,:]],bounds_error=False,fill_value=cval)
+      #    bkg_sc[i,:] = uf(np.arange(nx))
+      #for i in range(nx):
+      #    ucol = bkg_sc[:,i]
+      #    if len(ucol[ucol != cval]) > 0:
+      #        ucol[ucol == cval] = ucol[ucol != cval].mean()   
+      for i in range(nx):
+          ucol = bgimg[:,i]
+          if len(ucol[u_mask[:,i]]) > 0: 
+              ucol[np.where(u_mask[:,i] == False)[0] ] = ucol[u_mask[:,i]].mean()
+          bkg_sc[:,i] = ucol                        
+      if background_method == 'sigmaclip':
+          return bkg_sc  
+      else:
+      # continue now with the with screened image
+          bgimg = bkg_sc    
+   
+   kx0 = 0 ; kx1 = nx # default limits for valid lower background  
+   kx2 = 0 ; kx3 = nx # default limits for valid upper background  
+   ny4 = int(0.25*ny) # default width of each default background region 
+   
+   sig1 = 1 # unit for background offset, width
+   bg_limits_used = [0,0,0,0]  # return values used 
+
+   ## in the next section I replace the > 2.5 sigma peaks with the mean  
+   ## after subdividing the image strip to allow for the 
+   ## change in background level which can be > 2 over the 
+   ## image. Off-image parts are set to image mean. 
+   # this works most times in the absence of the sigma screening,but 
+   # can lead to overestimates of the background.  
+   # the call to the imagestats package is only done here, and should 
+   # consider replacement. Its not critical for the program.
+   #   
+   xlist = np.linspace(0,bgimg.shape[1],80)
+   xlist = np.asarray(xlist,dtype=int)
+   imgstats = imagestats.ImageStats(bgimg[in_img[0],in_img[1]],nclip=3)   
+   bg = imgstats.mean
+   bgsig  = imgstats.stddev
+   
+   if chatter > 2:
+      sys.stderr.write( 'background statistics: mean=%10.2f, sigma=%10.2f '%
+         (imgstats.mean, imgstats.stddev))
+      
+   # create boolean image flagging good pixels
+   img_good = np.ones(extimg.shape,dtype=bool)
+   # flag area out of picture as bad
+   img_good[out] = False
+
+   # replace high values in image with estimate of mean  and flag them as not good   
+   
+   for i in range(78):
+      # after the sigma screening this is a bit of overkill, leave in for now 
+      sub_bg = boxcar(bgimg[:,xlist[i]:xlist[i+2]] , (5,5), mode='reflect', cval=cval)
+      sub_bg_use = np.where( np.abs(sub_bg - cval) > 1.0e-5 ) # list of coordinates
+      imgstats = None
+      if sub_bg_use[0].size > 0: 
+         imgstats = imagestats.ImageStats(sub_bg[sub_bg_use],nclip=3)
+         # patch values in image (not out of image) with mean if outliers
+         aval = 2.0*imgstats.stddev
+         img_clip_ = (
+            (np.abs(bgimg[:,xlist[i]:xlist[i+2]]-cval) < 1e-6) | 
+            (np.abs(sub_bg - imgstats.mean) > aval) | 
+            (sub_bg <= 0.) | np.isnan(sub_bg) )
+         bgimg[:,xlist[i]:xlist[i+2]][img_clip_] = imgstats.mean  # patch image
+         img_good[:,xlist[i]:xlist[i+2]][img_clip_] = False       # flag patches 
+   #plt.imshow(extimg,vmin=10,vmax=50)
+   #plt.show()
+   #plt.imshow(img_good)
+   #plt.show()
+   # the next section selects the user-selected or default background for further processing
+   if chatter > 1: 
+      if background_method == 'boxcar': 
+         sys.stderr.write( "BACKGROUND METHOD: %s;  background smoothing = %s\n"%
+             (background_method,background_smoothing))
+      else:
+         sys.stderr.write( "BACKGROUND METHOD:%s\n"(background_method ))
+      
+   if not ((background_method == 'splinefit') | (background_method == 'boxcar') ):
+      sys.stderr.write('background method missing; currently reads : %s\n'%(background_method))
+
+   if background_method == 'boxcar':        
+      # boxcar smooth in x,y using the global parameter background_smoothing
+      bgimg = boxcar(bgimg,background_smoothing,mode='reflect',cval=cval)
+   
+   if background_lower[0] == None:
+      bg1 = bgimg[0:ny4,:].copy()
+      bg_limits_used[0]=0
+      bg_limits_used[1]=ny4
+      bg1_good = img_good[0:ny4,:] 
+      kx0 = np.min(np.where(img_good[0,:]))+10  # assuming the spectrum is in the top two thirds of the detector
+      kx1 = np.max(np.where(img_good[0,:]))-10
+   else:
+      # no curvature, no second order:  limits 
+      bg1_1= np.max(np.array([yloc_spectrum - sig1*background_lower[0],20 ]))
+      #bg1_0=  np.max(np.array([yloc_spectrum - sig1*(background_lower[0]+background_lower[1]),0]))
+      bg1_0=  np.max(np.array([yloc_spectrum - sig1*(background_lower[1]),0]))
+      bg1 = bgimg[int(bg1_0):int(bg1_1),:].copy() 
+      bg_limits_used[0]=bg1_0
+      bg_limits_used[1]=bg1_1
+      bg1_good = img_good[int(bg1_0):int(bg1_1),:] 
+      kx0 = np.min(np.where(img_good[int(bg1_0),:]))+10  # assuming the spectrum is in the top two thirds of the detector   
+      kx1 = np.max(np.where(img_good[int(bg1_0),:]))-10  # corrected for edge effects
+      
+   #if ((kx2-kx0) < 20): 
+   #   print 'not enough valid upper background points'   
+
+   if background_upper[0] == None:
+      bg2 = bgimg[-ny4:ny,:].copy()
+      bg_limits_used[2]=ny-ny4
+      bg_limits_used[3]=ny
+      bg2_good = img_good[-ny4:ny,:]
+      kx2 = np.min(np.where(img_good[ny-1,:]))+10  # assuming the spectrum is in the top two thirds of the detector
+      kx3 = np.max(np.where(img_good[ny-1,:]))-10
+   else:   
+      bg2_0= np.min(np.array([yloc_spectrum + sig1*background_upper[0],180 ]))
+      #bg2_1=  np.min(np.array([yloc_spectrum + sig1*(background_upper[0]+background_upper[1]),ny]))
+      bg2_1=  np.min(np.array([yloc_spectrum + sig1*(background_upper[1]),ny]))
+      bg2 = bgimg[int(bg2_0):int(bg2_1),:].copy()
+      bg_limits_used[2]=bg2_0
+      bg_limits_used[3]=bg2_1
+      bg2_good = img_good[int(bg2_0):int(bg2_1),:]
+      kx2 = np.min(np.where(img_good[int(bg2_1),:]))+10  # assuming the spectrum is in the top two thirds of the detector
+      kx3 = np.max(np.where(img_good[int(bg2_1),:]))-10
+      
+   #if ((kx3-kx2) < 20): 
+   #   print 'not enough valid upper background points'   
+      
+
+   if background_method == 'boxcar': 
+      bg1 = bg1_dis = bg1.mean(0)
+      bg2 = bg2_dis = bg2.mean(0)
+      bg1_dis_good = np.zeros(nx,dtype=bool)
+      bg2_dis_good = np.zeros(nx,dtype=bool)
+      for i in range(nx):
+        bg1_dis_good[i] = np.where(bool(int(bg1_good[:,i].mean(0))))
+        bg2_dis_good[i] = np.where(bool(int(bg2_good[:,i].mean(0))))
+      
+   if background_method == 'splinefit':  
+   
+      #  mean bg1_dis, bg2_dis across dispersion 
+      
+      bg1_dis = np.zeros(nx) ; bg2_dis = np.zeros(nx)
+      for i in range(nx):
+         bg1_dis[i] = bg1[:,i][bg1_good[:,i]].mean()
+         if not bool(int(bg1_good[:,i].mean())): 
+            bg1_dis[i] = cval      
+         bg2_dis[i] = bg2[:,i][bg2_good[:,i]].mean()  
+         if not bool(int(bg2_good[:,i].mean())): 
+            bg2_dis[i] = cval
+      
+      # some parts of the background may have been masked out completely, so 
+      # find the good points and the bad points   
+      bg1_dis_good = np.where( np.isfinite(bg1_dis) & (np.abs(bg1_dis - cval) > 1.e-7) )
+      bg2_dis_good = np.where( np.isfinite(bg2_dis) & (np.abs(bg2_dis - cval) > 1.e-7) )
+      bg1_dis_bad = np.where( ~(np.isfinite(bg1_dis) & (np.abs(bg1_dis - cval) > 1.e-7)) )   
+      bg2_dis_bad = np.where( ~(np.isfinite(bg2_dis) & (np.abs(bg2_dis - cval) > 1.e-7)) )
+                 
+      # fit a smoothing spline to each background 
+         
+      x = bg1_dis_good[0]
+      s = len(x) - np.sqrt(2.*len(x)) 
+      if smo1 != None: s = smo1
+      if len(x) > 40: x = x[7:len(x)-7]  # clip end of spectrum where there is downturn
+      w = np.ones(len(x))   
+      tck1 = interpolate.splrep(x,bg1_dis[x],w=w,xb=bg1_dis_good[0][0],xe=bg1_dis_good[0][-1],k=3,s=s) 
+      bg1 = np.ones(nx) *  (bg1_dis[x]).mean()  
+      bg1[np.arange(kx0,kx1)] = interpolate.splev(np.arange(kx0,kx1), tck1)
+   
+      x = bg2_dis_good[0]
+      s = len(x) - np.sqrt(2.*len(x))      
+      if smo2 != None: s = smo1
+      if len(x) > 40: x = x[10:len(x)-10]  # clip
+      w = np.ones(len(x))   
+      tck2 = interpolate.splrep(x,bg2_dis[x],w=w,xb=bg2_dis_good[0][0],xe=bg2_dis_good[0][-1],k=3,s=s)    
+      bg2 = np.ones(nx) *  (bg2_dis[x]).mean()  
+      bg2[np.arange(kx2,kx3)] = interpolate.splev(np.arange(kx2,kx3), tck2)
+      
+      # force bg >= 0:
+      # spline can do weird things ?
+      negvals = bg1 < 0.0
+      if negvals.any(): 
+         bg1[negvals] = 0.0
+         if chatter > 1:
+            print("background 1 set to zero in ",len(np.where(negvals)[0])," points")
+      
+      negvals = bg2 < 0.0
+      if negvals.any(): 
+         bg2[negvals] = 0.0
+         if chatter > 1:
+            print("background 1 set to zero in ",len(np.where(negvals)[0])," points")
+   
+   # image constructed from linear inter/extra-polation of bg1 and bg2
+   
+   bgimg_lin = np.zeros(ny*nx).reshape(ny,nx)
+   dbgdy = (bg2-bg1)/(ny-1)
+   for i in range(ny):
+      bgimg_lin[i,:] = bg1 + dbgdy*i
+      
+   # interpolate background and generate smooth interpolation image 
+   if ( (background_lower[0] == None) & (background_upper[0] == None)):
+        # default background region
+        dbgdy = (bg2-bg1)/150.0 # assuming height spectrum 200 and width extraction regions 30 pix each
+        for i9 in range(bgimg.shape[0]):
+           bgimg[i9,kx0:kx1] = bg1[kx0:kx1] + dbgdy[kx0:kx1]*(i9-25)
+           bgimg[i9,0:kx0] = bg2[0:kx0]
+           bgimg[i9,kx1:nx] = bg2[kx1:nx]
+        if chatter > 2: print("1..BACKGROUND DEFAULT from BG1 and BG2")   
+   elif ((background_lower[0] != None) & (background_upper[0] == None)):
+     # set background to lower background region   
+        for i9 in range(bgimg.shape[0]):
+           bgimg[i9,:] = bg1 
+        if chatter > 2: print("2..BACKGROUND from lower BG1 only")   
+   elif ((background_upper[0] != None) & (background_lower[0] == None)):
+     # set background to that of upper background region   
+        for i9 in range(bgimg.shape[0]):
+           bgimg[i9,:] = bg2
+        if chatter > 2: print("3..BACKGROUND from upper BG2 only")   
+   else:
+     # linear interpolation of the two background regions  
+        dbgdy = (bg2-bg1)/(background_upper[0]+0.5*background_upper[1]+background_lower[0]+0.5*background_lower[1]) 
+        for i9 in range(bgimg.shape[0]):
+           bgimg[i9,kx0:kx1] = bg1[kx0:kx1] + dbgdy[kx0:kx1]*(i9-int(100-(background_lower[0]+0.5*background_lower[1])))
+           bgimg[i9,0:kx0] =  bg2[0:kx0]    # assuming that the spectrum in not in the lower left corner 
+           bgimg[i9,kx1:nx] = bg2[kx1:nx]
+        if chatter > 2: print("4..BACKGROUND from BG1 and BG2")   
+      
+   return bg, bg1, bg2, bgsig, bgimg, bg_limits_used, (bg1_good, bg1_dis, 
+          bg1_dis_good, bg2_good, bg2_dis, bg2_dis_good, bgimg_lin)
+

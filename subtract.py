@@ -183,14 +183,14 @@ def flipImage(img, pivot):
     imgF = np.flipud(imgP)
     return imgF[padY[0] : -padY[1], padX[0] : -padX[1]]
 
-def replace(aster, obsid, regs, shift_v=0, motion_dict=motion_dict,radec='fitting'):
+def replace(aster, obsid, regs, shift_v=0, motion_dict=motion_dict,radec='fitting',adjname='_final'):
     # obtain flipped image
     print(aster,obsid)
     hdu = read_data(aster, obsid)
     data = hdu[1].data
     exp = hdu[1].header['EXPOSURE']
     if radec=='fitting':
-        ra,dec=anker2sky(aster, obsid, 'colina96', '_smeargauss', output='radec')
+        ra,dec=anker2sky(aster, obsid, 'colina96', adjname, output='radec')
     elif radec=='header':
         ra = hdu[1].header['RA_OBJ']
         dec = hdu[1].header['DEC_OBJ']
@@ -204,7 +204,7 @@ def replace(aster, obsid, regs, shift_v=0, motion_dict=motion_dict,radec='fittin
     data_rota1 = rotateImage(data,-angle,(xpix,ypix))
     # flip and shift
     xpix_flip = xpix+shift_v
-    #plt.imshow(data_rota1, vmin=0, vmax=0.1*exp, origin='bottom')
+    #plt.imshow(data, vmin=0, vmax=0.1*exp, origin='bottom')
     #plt.plot(800,xpix_flip,'kx',MarkerSize=5)
     #plt.xlim(600,1000)
     #plt.ylim(600,700)
@@ -240,8 +240,8 @@ def replace(aster, obsid, regs, shift_v=0, motion_dict=motion_dict,radec='fittin
             data_flip_shiftp = data_flip
         # rotate
         data_rota2 = rotateImage(data_flip_shiftp,angle,(xpix,ypix))
-        plt.imshow(data_rota2, vmin=0, vmax=0.1*exp, origin='bottom')
-        plt.show()
+        #plt.imshow(data_rota2, vmin=0, vmax=0.1*exp, origin='bottom')
+        #plt.show()
         # identify stars
         star = data - np.median([med,data,data_rota2],axis=0)
         star_part = np.zeros(star.shape)
@@ -277,12 +277,16 @@ def replace_img(obsid):
                                  [860,910,1170,1280,'up'],[820,870,1224,1324,'up'],
                                  [770,830,1280,1390,'up'],[724,780,1350,1454,'up'],
                                  [950,990,1010,1040,'dw']],'radec':'fitting','shift_v':-3},
+                 '00014034004':{'aster':'psyche','regs':[[900,950,980,1060,'dw'],[820,890,1090,1160,'dw']],'radec':'fitting','shift_v':2},
+                 '00014045003':{'aster':'psyche','regs':[[800,840,1220,1280,'dw']],'radec':'fitting','shift_v':2},
+                 '00014045004':{'aster':'psyche','regs':[[710,760,1270,1330,'dw']],'radec':'fitting','shift_v':0}
                 }
-    subt_dict = {'00091268001':{'aster':'flora','star':'00091501001','offset':(5,5)},
-                 '00091507001':{'aster':'flora','star':'00091505001','offset':(2,4)},
-                 '00091503001':{'aster':'flora','star':'00091501001','offset':(-5,-7)},
-                 '00091207002':{'aster':'juno','star':'00091206002','offset':(-2,1)},
-                }
+    #subt_dict = {'00091268001':{'aster':'flora','star':'00091501001','offset':(5,5)},
+    #             '00091507001':{'aster':'flora','star':'00091505001','offset':(2,4)},
+    #             '00091503001':{'aster':'flora','star':'00091501001','offset':(-5,-7)},
+    #             '00091207002':{'aster':'juno','star':'00091206002','offset':(-2,1)},
+    #            }
+    subt_dict = {}
     if obsid in repl_dict.keys():
         inp_dict = repl_dict[obsid]
         data_repl = replace(inp_dict['aster'],obsid,inp_dict['regs'],radec=inp_dict['radec'],shift_v=inp_dict['shift_v'])
@@ -299,7 +303,7 @@ def replace_img(obsid):
 #replace('iris', '00091523001',regs=[[930,990,1090,1150,'up']]) #----
 #replace('nysa', '00091532001',regs=[[1050,1090,860,900,'up'],[835,860,1130,1180,'dw']],shift_v=-5) #----
 
-replace('themis', '00091593001',regs=[[900,930,1080,1120,'up']],radec='header') #----
+#replace('themis', '00091593001',regs=[[900,930,1080,1120,'up']],radec='header') #----
 #replace('themis', '00091595001',regs=[[1050,1090,900,940,'up']],radec='header') #----
 #replace('vesta', '00091022002',regs=[[850,880,1140,1170,'up']],radec='header',shift_v=1) #----
 #replace('dembowska', '00091027001',regs=[[970,1000,920,960,'cn'],[990,1010,880,910,'dw'],[820,860,1130,1180,'cn'],[760,800,1240,1290,'up']]) #----
@@ -319,6 +323,11 @@ replace('themis', '00091593001',regs=[[900,930,1080,1120,'up']],radec='header') 
 #x replace('nysa', '00091540001',regs=[[900,980,1000,1080,'up']]) #x center
 #x replace('nysa', '00091538001',regs=[[900,980,1000,1080,'up']]) #x center
 #replace('flora', '00091501001',regs=[[910,980,880,960,'cn'],[830,870,1030,1080,'cn']],shift_v=-2)
+
+#x replace('psyche','00014034003',regs=[[960,1020,940,1000,'dw']])
+#replace('psyche','00014034004',regs=[[900,950,980,1060,'dw'],[820,890,1090,1160,'dw']],radec='fitting',shift_v=2)
+#replace('psyche','00014045003',regs=[[800,840,1220,1280,'dw']],radec='fitting',shift_v=2)
+#replace('psyche','00014045004',regs=[[710,760,1270,1330,'dw']])
 
 #shift_star('hygiea', '00091556001', '00091554001')
 #shift_star('massalia', '00091545001', '00091543001')

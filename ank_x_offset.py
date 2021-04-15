@@ -91,7 +91,7 @@ def check_refl(aster, sun, adjname='_smeargauss'):
 
 #check_refl(aster_list, 'colina96')
 
-def fit_refl(aster, sun, adjname='_smeargauss', band=[3000,5000], method='linear', plot=False):
+def fit_refl(aster, sun, adjname='_smeargauss', band=[3000,5000], method='linear', plot=False, obsid=False):
     '''fit the reflectance spectrum
 
     Parameters
@@ -137,8 +137,11 @@ def fit_refl(aster, sun, adjname='_smeargauss', band=[3000,5000], method='linear
         init = [-0.001,3000, -3]
     # read refl
     solar_spec_dict = solar_flux(sun, binbox=20)
-    flux_dict = mean_aster_flux(aster,adjname = adjname,binbox=10)
-    refl_dict = getRefl(flux_dict, solar_spec_dict, aster=aster)
+    if obsid:
+        flux_dict = aster_flux(aster, obsid, adjname, binbox=10)
+    else:
+        flux_dict = mean_aster_flux(aster,adjname = adjname,binbox=10)
+    refl_dict = getRefl(flux_dict, solar_spec_dict, aster=aster)  
     wave = refl_dict['wave']
     refl = refl_dict['flux']
     wave_tofit = wave[(wave>band[0])&(wave<band[1])]
@@ -235,7 +238,7 @@ def fit_offset(aster, obsid, sun, adjname='_smeargauss',
         aster_dict = normRefl(aster_dict) # normalized at 3800A by default
         # read or determine coefficients of the refl's reddening
         if red_table == False:
-            red = fit_refl(aster, sun, band=band, method=refl_method)
+            red = fit_refl(aster, sun, adjname, band=band, method=refl_method,obsid=obsid)
         else: red = red_table
         a, b = red
     else: a, b = (0, 1)
@@ -353,6 +356,7 @@ def iter_offset(aster, obsid, sun, adjname='_smeargauss', output='plot'):
 #    for obsid in obs_list:
 #        iter_offset(aster, obsid, 'colina96')
 #iter_offset('juno', '00091026003', 'colina96', output='plot')
+#iter_offset('hebe', '00091274001', 'colina96', output='plot')
 
 def stat_offset(plot):
     '''plot statistic figurs
@@ -444,7 +448,7 @@ def ank_c2anker(aster, obsid, sun, adjname='_smeargauss', output='newanker'):
     anker_x = hdul[0].header['DETX_X']
     anker_y = hdul[0].header['DETY_X']
     # get x_offset
-    xoff = iter_offset(aster, obsid, sun, output='offsetPixel')
+    xoff = iter_offset(aster, obsid, sun, adjname=adjname, output='offsetPixel')
     # calculate offsets of anker in det coordinate
     alpha = angle*(np.pi/180.)
     anker_xoff = xoff*np.cos(alpha) - yoff*np.sin(alpha)
@@ -467,6 +471,7 @@ def ank_c2anker(aster, obsid, sun, adjname='_smeargauss', output='newanker'):
         plt.imshow(img, vmin=5,vmax=40,origin='lower')
         plt.plot(ankerimg[0], ankerimg[1], 'wx', MarkerSize=5)
         plt.plot(ankerimg_new[0], ankerimg_new[1], 'kx', MarkerSize=5)
+        plt.show()
         # plot rotated img
         s1 = 0.5*img.shape[0]
         s2 = 0.5*img.shape[1]
@@ -491,6 +496,8 @@ def ank_c2anker(aster, obsid, sun, adjname='_smeargauss', output='newanker'):
         e2 = int(0.5*b.shape[0])
         c = b[e2-100:e2+100,:]
         ank_c = [ (c.shape[0]-1)/2+1, (c.shape[1]-1)/2+1 , 0, c.shape[1]]
+        #from test import findBackground
+        #findBackground(c,yloc_spectrum=ank_c[0])
         fig2 = plt.figure()
         plt.imshow(c,vmin=5,vmax=40,origin='lower')
         plt.plot(ank_c[1],ank_c[0],'wx',MarkerSize=5)
@@ -502,6 +509,8 @@ def ank_c2anker(aster, obsid, sun, adjname='_smeargauss', output='newanker'):
 #print(ank_c2anker('juno', '00091026003', 'colina96','_smeargauss',output='plot'))
 #ank_c2anker('dembowska', '00091239001', 'colina96','_smeargauss',output='plot')
 #ank_c2anker('iris', '00091519001', 'colina96','_smeargauss',output='plot')
+#ank_c2anker('pallas','00091227001','colina96','_smeargauss',output='plot')
+#ank_c2anker('standard/p177', '00056763002', 'colina96','_4_default',output='plot')
 
 def phi_fit(t,rx,ry):
    xf,yf,xp1,yp1 = getCalData(160,calfile=None,chatter=0)
@@ -525,6 +534,8 @@ def anker2sky(aster, obsid, sun, adjname, output='radec'):
     filestub = 'sw'+obsid
     specfile, lfilt1, lfilt1_ext, lfilt2, lfilt2_ext, attfile = \
         fileinfo(filestub,1,directory=indir,wheelpos=160,chatter=0)
+    if type(lfilt1)==type(None):
+        lfilt1 = 'fk'
     if lfilt1 == "fk" : 
         l2filter = "uvw1"
     else: l2filter = lfilt1
@@ -563,6 +574,7 @@ def anker2sky(aster, obsid, sun, adjname, output='radec'):
         pass
 
 #print(anker2sky('juno', '00091026003', 'colina96', '_smeargauss','radec'))
+#print(anker2sky('psyche', '00014031003', 'colina96', '_1_default','radec'))
 
 def compare_refl_afbe(aster,adjname_be,adjname_af,output='refl',wave_norm=4600):
     solar_spec_dict = solar_flux('colina96',binbox=20)
