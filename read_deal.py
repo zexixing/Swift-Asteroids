@@ -545,7 +545,7 @@ def aster_flux(aster, obsid, adjname, binbox=20):
         return flux_dict
 
 #sun = getSolarFlux('sun_ref_colina96.asc.txt', if_smooth=False)
-sun = getSolarFlux('00091706004.pha', if_smooth=False)
+#sun = getSolarFlux('00091706004.pha', if_smooth=False)
 '''
 plt.plot(sun['wave']/10,sun['flux']/100,'y-',lw=2)
 aster = aster_flux('juno', '00091026003', '_final', binbox=False)
@@ -608,7 +608,7 @@ plt.plot(refl_mmt['wave']/10,refl_mmt['flux']*(f(4500)/f(3800)),'r-',label='MMT'
 plt.legend()
 plt.show()
 '''
-
+'''
 s_class=['eros','eunomia','flora','hebe','iris','massalia','juno','toutatis']
 x_class=['nysa','psyche','lutetia']
 c_class=['ceres','hygiea']
@@ -656,7 +656,7 @@ plt.xlim(215,550)
 plt.xlabel('Wavelength(nm)')
 plt.ylabel('Reflectance(arbitrary)')
 plt.show()
-
+'''
 '''
 juno = fits.open('/Users/zexixing/Research/swiftASTER/docs/juno/00091026003_final.pha')
 data = juno[2].data

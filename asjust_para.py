@@ -119,7 +119,7 @@ def extraAster(obs,aster,horizon_id):
     from tools import getRadec
     from astropy.io import fits
     from subtract import replace_img
-    adjname = '_final'#'_smeargauss'#_4width' # '_xxx'
+    adjname = '_test'#'_smeargauss'#_4width' # '_xxx'
     obsid = obs# 00091204002 91205002 91206002 91207002
     print(aster,obsid)
     docsdir = '/Users/zexixing/Research/swiftASTER/docs/'+aster
@@ -128,17 +128,17 @@ def extraAster(obs,aster,horizon_id):
     ext = 1
     file_path='/Users/zexixing/Research/swiftASTER/docs/motion_log.txt'
     ra, dec = getRadec(obsid,horizon_id,'@swift',aster)
-    uvotgetspec.getSpec(ra,dec,obsid,ext,indir=datadir,wr_outfile=True,predict2nd=True,plot_img=False,plot_raw=False,plot_spec=False,
+    uvotgetspec.getSpec(ra,dec,obsid,ext,indir=datadir,wr_outfile=True,predict2nd=True,plot_img=True,plot_raw=True,plot_spec=False,
                         fit_second=True,chatter=2,wheelpos=160,clobber=True,highlight=False,skip_field_src=True, 
                         ifmotion=True, motion_file=file_path)
     os.system('rm *.log *.ub1 *.spec')
-    os.system('rm '+datadir+'/'+'*.png')
+    #os.system('rm '+datadir+'/'+'*.png')
     os.system('mv '+docsdir+'/sw'+obsid+'ugu_1ord_1_g.pha'+' '+docsdir+'/'+obsid+adjname+'.pha')
     os.system('mv '+docsdir+'/sw'+obsid+'ugu_1ord_1_f.pha'+' '+docsdir+'/'+obsid+adjname+'.pha')
     ##file_name = 'sw'+obsid+'ugu_dt.img'
     ##ra = fits.open(datadir+'/'+file_name)[0].header['RA_OBJ']
     ##dec = fits.open(datadir+'/'+file_name)[0].header['DEC_OBJ']
-    ra,dec=anker2sky(aster, obsid, 'colina96', '_final', output='radec')
+    ra,dec=anker2sky(aster, obsid, 'colina96', '_test', output='radec')
     print(ra,dec)
     #os.system('rm '+docsdir+'/'+obsid+adjname+'.pha')
     #x_offset = iter_offset(aster, obsid, 'colina96', output='offsetPixel')
@@ -160,10 +160,10 @@ def extraAster(obs,aster,horizon_id):
     #os.system('rm *.png')
 
 #extraAster('00014034004','psyche',16)
-#extraAster('00091207002','juno',3)
+extraAster('00091207002','juno',3)
 
-print(getRadec('00014031003',16,'@swift','psyche'))
-print(anker2sky('psyche','00014031003', 'colina96', '_final', output='radec'))
+#print(getRadec('00014031003',16,'@swift','psyche'))
+#print(anker2sky('psyche','00014031003', 'colina96', '_final', output='radec'))
 '''
 # juno
 aster = 'juno'

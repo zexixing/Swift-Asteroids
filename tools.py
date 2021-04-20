@@ -87,3 +87,5 @@ def getRadec(obsid,horizon_id,coord,aster):
 def hmsdms2deg(hmsdms):
     c = SkyCoord(hmsdms, unit=(u.hourangle, u.deg)) # '00 42 30 +41 12 00'
     return c.ra.value, c.dec.value
+
+print(au2km(1))

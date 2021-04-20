@@ -1161,13 +1161,13 @@ def star_compare(star,mod_dict):
 #mod_name = None
 
 #AGK81
-obsid = '00057530004'
+#obsid = '00057530004'
 #obsid = '00057530006'
 ##obsid = '00057530012'
 ##obsid = '00057530014'
-star = 'agk81'
-obs_name = 'agk_81d266_005.fits'#'agk_81d266_stisnic_007.fits'
-mod_name = None
+#star = 'agk81'
+#obs_name = 'agk_81d266_005.fits'#'agk_81d266_stisnic_007.fits'
+#mod_name = None
 
 
 #standard_star(star, obsid, obs_name=obs_name, mod_name=mod_name)
